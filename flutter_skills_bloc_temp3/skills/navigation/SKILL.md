@@ -1,29 +1,27 @@
 ---
-name: Navigation
-description: Кастомная декларативная навигация, Navigator pages list, метод change, deep linking, sealed class pages, Router не нужен
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: navigation
+description: Use when implementing navigation in Flutter — declarative Navigator with pages list, change() method, deep linking, sealed class pages. MUST use for any navigation setup, screen transitions, deep links, or routing questions. Covers why NOT to use GoRouter or other routing packages.
 ---
 
 # Navigation / Навигация
 
 ## Custom Declarative Navigator / Кастомный декларативный навигатор
 
-Используется собственный навигатор без сторонних пакетов. Никаких GoRouter и подобных.
+Используй собственный навигатор без сторонних пакетов. Никаких GoRouter.
 
 ### Navigator vs Router -- это разные вещи
 
 - **Navigator** -- стек экранов с анимациями (карточная стопочка)
 - **Router** -- синхронизация состояния навигации с платформой (URL в браузере)
 
-> "Это вещи, которые работают отдельно. Не надо думать, что если хотите декларативную навигацию, то нужен роутер."
+Это вещи, которые работают отдельно. Декларативная навигация не требует роутера.
 
 **Router не нужен большинству приложений**, особенно:
 - Если не делаете веб
 - Если не нужны deep links через URL
 - Если начинающий разработчик
 
-> "Моё напутствие, особенно если вы не делаете под веб -- не тащите роутер. Используйте просто декларативный навигатор. Его хватит для всего."
+Не тащи роутер. Используй просто декларативный навигатор. Его хватит для всего.
 
 Router можно добавить в **любой момент** позже -- они независимы.
 
@@ -58,7 +56,7 @@ setState(() {});
 
 ## Метод change -- ядро навигации
 
-> "Если вы поймёте метод change как своего спасителя, вы сможете реализовать абсолютно всё, что угодно."
+Метод `change` — ядро навигации. Через него реализуется любая навигация.
 
 ```dart
 void change(List<Page> Function(List<Page> currentPages) modifier) {
@@ -130,7 +128,7 @@ AppNavigator.change(context, (pages) {
 
 ## Pages как Sealed Class
 
-> "Pages -- это не виджеты! Не называйте экраны HomePage, SettingsPage как виджеты. Page оставьте для навигатора."
+Pages -- это не виджеты. Не называй экраны HomePage, SettingsPage как виджеты. Page оставляй для навигатора.
 
 ```dart
 sealed class AppPage extends Page<void> {

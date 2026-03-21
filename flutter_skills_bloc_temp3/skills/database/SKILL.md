@@ -1,19 +1,17 @@
 ---
-name: Database
-description: Drift/SQLite, SQL-based DDL, миграции, multi-isolate, key-value в SQLite, DateTime UTC best practice
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: database
+description: Use when working with databases — Drift/SQLite, SQL-based DDL, migrations, multi-isolate support, key-value storage in SQLite, DateTime UTC best practices. MUST use for any database, migration, data storage, or DateTime handling questions in Flutter.
 ---
 
 # Database / База данных
 
 ## Drift (SQLite)
 
-Используется Drift для SQLite на нативных платформах. SharedPreferences -- для веба.
+Используй Drift для SQLite на нативных платформах. SharedPreferences — для веба.
 
 ### Почему не SQLite на вебе
 
-> "Вы можете использовать SQLite под веб, но WASM-сборка SQLite довольно тяжёлая. Плюс надёжность оставляет желать лучшего. Я предпочитаю SharedPreferences под вебом."
+WASM-сборка SQLite довольно тяжёлая, и надёжность оставляет желать лучшего. Используй SharedPreferences под вебом.
 
 Разделение:
 - **Нативные платформы** (Android, iOS, macOS, Windows, Linux): Drift/SQLite
@@ -30,10 +28,10 @@ if (kIsWeb) {
 
 ## SQL-based DDL / Объявление таблиц через SQL
 
-> "Я предпочитаю именно через SQL объявлять таблицы, а не в объектном виде."
+Объявляй таблицы через SQL DDL, а не в объектном виде:
 
 ```dart
-// ПРЕДПОЧТИТЕЛЬНО -- SQL DDL:
+// ПРЕДПОЧТИТЕЛЬНО — SQL DDL:
 @DriftDatabase(
   include: {'tables.drift'},
 )
@@ -58,10 +56,10 @@ CREATE TABLE messages (
 CREATE INDEX idx_messages_chat ON messages(chat_id);
 ```
 
-Вместо объектного стиля Drift:
+Не используй объектный стиль Drift:
 
 ```dart
-// Менее предпочтительно -- объектный стиль:
+// Менее предпочтительно — объектный стиль:
 class Chats extends Table {
   TextColumn get id => text()();
   TextColumn get title => text().withDefault(const Constant(''))();
@@ -93,16 +91,11 @@ MigrationStrategy get migration => MigrationStrategy(
 );
 ```
 
-> "Тут не всё идеально -- некоторые индексы лишние, кое-где селективность нарушена, есть триггеры, которые стоило бы выкинуть. Но бог с ними."
-
 ## Multi-Isolate Support / Работа из нескольких изолятов
 
-SQLite через Drift поддерживает использование из нескольких изолятов:
+Drift поддерживает запуск в отдельном изоляте и переиспользование БД из нескольких изолятов:
 
 ```dart
-// Drift поддерживает запуск в отдельном изоляте
-// и переиспользование БД из нескольких изолятов
-
 // Один инстанс SQLite, несколько изолятов обращаются к нему
 final database = DriftDatabase(
   LazyDatabase(() async {
@@ -112,11 +105,9 @@ final database = DriftDatabase(
 );
 ```
 
-> "Drift поддерживает запуск в отдельном изоляте и переиспользование базы данных из нескольких различных изолятов."
-
 ## Key-Value Storage в SQLite
 
-Вместо отдельного key-value хранилища можно использовать таблицу в SQLite:
+Вместо отдельного key-value хранилища используй таблицу в SQLite:
 
 ```sql
 CREATE TABLE key_value (
@@ -125,20 +116,20 @@ CREATE TABLE key_value (
 );
 ```
 
-Это позволяет:
+Это даёт:
 - Единый источник данных (одна БД)
 - Транзакционность
-- Работа из нескольких изолятов
+- Работу из нескольких изолятов
 - Кэш в единой базе
 
-## DateTime UTC -- критически важно
+## DateTime UTC — критически важно
 
-> "Ни в коем случае не передавайте дату как local time. Обязательно в UTC. Всегда, всегда, всегда."
+Не передавай дату как local time. Всегда используй UTC.
 
 ### Проблема
 
 ```dart
-// DateTime.now() -- локальное время:
+// DateTime.now() — локальное время:
 print(DateTime.now());
 // 2024-07-12 15:30:00.000
 // Нет таймзоны! Сервер подумает, что это его локальное время
@@ -175,10 +166,10 @@ class Message {
 
 ### Правила
 
-1. **Передавайте** на сервер -- всегда UTC
-2. **Требуйте** от сервера -- всегда UTC
-3. **Храните** в базе -- всегда UTC
-4. **Отображайте** пользователю -- конвертируйте в local
+1. **Передавай** на сервер — всегда UTC
+2. **Требуй** от сервера — всегда UTC
+3. **Храни** в базе — всегда UTC
+4. **Отображай** пользователю — конвертируй в local
 
 ```dart
 // Отображение:
@@ -187,7 +178,7 @@ Text(DateFormat.yMd().format(message.createdAt.toLocal()))
 
 ### Если нужна таймзона пользователя
 
-> "Передавайте отдельным полем. Отдельно время в UTC и отдельно таймзона."
+Передавай отдельным полем. Отдельно время в UTC и отдельно таймзона:
 
 ```json
 {
@@ -198,23 +189,21 @@ Text(DateFormat.yMd().format(message.createdAt.toLocal()))
 
 ### Проверка в middleware/assert
 
+Добавь assert в middleware HTTP-клиента для проверки, что все DateTime в запросах — UTC:
+
 ```dart
-// Можно добавить assert в middleware HTTP-клиента:
-// Проверять, что все DateTime в запросах -- UTC
 assert(
   requestBody['created_at'].endsWith('Z'),
   'DateTime must be in UTC',
 );
 ```
 
-> "Прямо сегодня идите и меняйте. Можете даже в middleware assert написать, чтобы проверялось."
-
-## Key Takeaways / Ключевые выводы
+## Key Takeaways
 
 1. **Drift/SQLite** для нативных платформ, **SharedPreferences** для веба
 2. SQL DDL предпочтительнее объектного стиля Drift
-3. Multi-isolate поддержка -- несколько изолятов, одна БД
-4. **DateTime ВСЕГДА в UTC** -- передача, хранение, получение
-5. Таймзону пользователя -- отдельным полем, не в DateTime
+3. Multi-isolate поддержка — несколько изолятов, одна БД
+4. **DateTime ВСЕГДА в UTC** — передача, хранение, получение
+5. Таймзону пользователя — отдельным полем, не в DateTime
 6. Локальное время только для отображения пользователю
 7. Key-value можно хранить в той же SQLite

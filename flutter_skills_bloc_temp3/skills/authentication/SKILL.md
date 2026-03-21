@@ -1,15 +1,13 @@
 ---
-name: Authentication
-description: Аутентификация, auth middleware, sealed UserEntity, auth scope как guard, отдельный навигатор для auth
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: authentication
+description: Use when implementing authentication — auth middleware with callbacks, sealed UserEntity, AuthScope as guard, separate auth navigator. MUST use for any login, logout, session management, or auth flow implementation in Flutter.
 ---
 
 # Authentication / Аутентификация
 
 ## Auth Middleware в HTTP-клиенте
 
-Auth middleware принимает два callback'а, а не BLoC напрямую:
+Передавай в auth middleware callback'и (`getToken`, `logout`), а не BLoC напрямую.
 
 ```dart
 class AuthMiddleware {
@@ -52,7 +50,7 @@ final client = ApiClient(
 
 ## Sealed UserEntity
 
-Пользователь моделируется как sealed class с двумя вариантами:
+Моделируй пользователя как sealed class с двумя вариантами.
 
 ```dart
 sealed class UserEntity {
@@ -103,6 +101,8 @@ switch (user) {
 - Более явный код
 
 ## Auth Scope как Guard
+
+> Паттерн скоупов подробно описан в `03_dependency_injection.md`. Здесь показана конкретная реализация для аутентификации.
 
 AuthenticationScope -- ключевой скоуп, который работает как **guard**: блокирует доступ к приложению, пока пользователь не аутентифицирован.
 

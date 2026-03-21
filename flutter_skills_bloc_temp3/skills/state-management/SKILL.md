@@ -1,19 +1,19 @@
 ---
-name: State Management (BLoC)
-description: Управление состоянием через BLoC pattern, sealed class events/states, SetStateMixin, BlocController, handle(), BlocObserver, тестирование BLoC
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: state-management
+description: Use when implementing BLoC pattern, creating events/states with sealed classes, setting up state machine (Idle/Processing/Success/Error), handle() pattern, BlocObserver, or testing BLoC. MUST use for ANY BLoC creation, state management setup, or BLoC testing in Flutter.
 ---
 
 # State Management / Управление состоянием (BLoC)
 
 ## BLoC как конечный автомат (State Machine)
 
-BLoC -- это конечный автомат. Принимает события (Events), меняет состояние (State), уведомляет подписчиков. Используется кастомная реализация с миксинами `SetStateMixin` (для `setState()`) и `BlocController` (для `handle()`).
+BLoC — конечный автомат. Принимает события (Events), меняет состояние (State), уведомляет подписчиков. Используй кастомную реализацию с миксинами `SetStateMixin` (для `setState()`) и `BlocController` (для `handle()`).
 
 ## Sealed Class States / Состояния через sealed class
 
 ### Четыре состояния -- и не больше
+
+Используй только четыре состояния: Idle / Processing / Success / Error. Этого достаточно для 99% кейсов.
 
 ```dart
 sealed class UserProfileState {
@@ -66,9 +66,7 @@ UserProfileInitialState
 
 ### Anti-pattern: множество состояний
 
-> "Ни в коем случае не создавайте InitialState, SuccessState, LoadingState. Не создавайте миллионы различных стейтов в зависимости от метода. Не делайте SuccessfullyCreated или CreatingState."
-
-Четвёрка `Idle / Processing / Success / Error` покрывает **99% всех кейсов** на любом приложении.
+Не создавай InitialState, SuccessState, LoadingState. Не создавай миллионы различных стейтов в зависимости от метода. Не делай SuccessfullyCreated или CreatingState.
 
 - **Idle** (простаивает) -- готов к обработке
 - **Processing** (обрабатывает) -- выполняет операцию
@@ -131,7 +129,7 @@ BlocBuilder<UserProfileBloc, UserProfileState>(
 
 ### Структура событий
 
-События -- sealed class с named constructors и приватными реализациями:
+Создавай события как sealed class с named constructors и приватными реализациями:
 
 ```dart
 sealed class UserProfileEvent {
@@ -187,7 +185,7 @@ class _UserProfileEvent$Delete extends UserProfileEvent {
 
 ### Callbacks в событиях
 
-Callbacks (`onSuccess`, `onError`) передаются **через события** -- это способ связать результат асинхронной операции с конкретным действием пользователя:
+Передавай callbacks (`onSuccess`, `onError`) **через события** -- это способ связать результат асинхронной операции с конкретным действием пользователя:
 
 ```dart
 // В виджете:
@@ -216,19 +214,62 @@ ElevatedButton(
 )
 ```
 
-**Используйте callbacks экономно** -- только для навигации и side effects (snackbar, dialog). Для отображения данных используйте `BlocBuilder`.
+**Используй callbacks экономно** -- только для навигации и side effects (snackbar, dialog). Для отображения данных используй `BlocBuilder`.
 
-**Важно:** В onSuccess/onError контекст может быть dismounted (асинхронность). Всегда проверяйте `context.mounted`.
+**Важно:** В onSuccess/onError контекст может быть dismounted (асинхронность). Всегда проверяй `context.mounted`.
 
 ## BLoC Implementation / Реализация BLoC
 
 ### SetStateMixin и BlocController
 
-Используются два миксина:
+Используй два миксина:
 - `SetStateMixin` -- предоставляет метод `setState()` для изменения состояния
 - `BlocController` -- предоставляет метод `handle()` с processing/error/done callbacks
 
+### Реализация SetStateMixin
+
+```dart
+/// Миксин для BLoC, предоставляющий метод setState
+/// аналогичный setState в StatefulWidget
+mixin SetStateMixin<S> on BlocBase<S> {
+  /// Устанавливает новое состояние напрямую (без emit)
+  void setState(S state) {
+    // ignore: invalid_use_of_visible_for_testing_member
+    emit(state);
+  }
+}
+```
+
+### Реализация BlocController
+
+```dart
+/// Миксин с паттерном handle() для стандартизированной обработки
+/// событий с processing/error/done
+mixin BlocController<E, S> on Bloc<E, S> {
+  /// Стандартный обработчик с processing -> action -> done/error
+  Future<void> handle(
+    Emitter<S> emit, {
+    required S Function() processing,
+    required S Function(Object error) error,
+    required S Function() done,
+    required Future<void> Function() action,
+  }) async {
+    emit(processing());
+    try {
+      await action();
+    } on Object catch (e, stackTrace) {
+      emit(error(e));
+      onError(e, stackTrace);
+    } finally {
+      emit(done());
+    }
+  }
+}
+```
+
 ### Один on<Event> handler с switch expression
+
+Не используй несколько `on` handlers. Один `on<Event>` с switch expression:
 
 ```dart
 class UserProfileBloc extends Bloc<UserProfileEvent, UserProfileState>
@@ -271,7 +312,7 @@ on<UserProfileEvent>(_onEvent);
 
 ### Метод handle()
 
-Паттерн `handle()` из миксина `BlocController` -- обёртка с processing/error/done:
+Используй паттерн `handle()` из миксина `BlocController` -- обёртку с processing/error/done:
 
 ```dart
 Future<void> _fetch(
@@ -444,7 +485,7 @@ BlocConsumer<UserProfileBloc, UserProfileState>(
 
 ## BlocObserver / Централизованное логирование
 
-Замена `ControllerObserver` из ChangeNotifier-подхода. Получает уведомления обо всех изменениях состояний и ошибках:
+Используй BlocObserver для централизованного логирования всех изменений состояний и ошибок:
 
 ```dart
 class AppBlocObserver extends BlocObserver {
@@ -483,7 +524,7 @@ class AppBlocObserver extends BlocObserver {
 }
 ```
 
-Регистрация при старте приложения:
+Регистрируй при старте приложения:
 
 ```dart
 void main() {
@@ -503,7 +544,7 @@ UserProfileBloc: UserProfileState$Success -> UserProfileState$Idle
 
 ## No Flutter Imports in BLoC
 
-> "Никаких импортов Flutter вообще, забудьте, вообще без исключений."
+Не импортируй Flutter в BLoC. Никаких импортов Flutter вообще, без исключений.
 
 Единственные допустимые исключения:
 - `flutter/foundation.dart` -- аннотации (`@protected`, `@immutable`), `VoidCallback`
@@ -518,7 +559,7 @@ UserProfileBloc: UserProfileState$Success -> UserProfileState$Idle
 
 ## No BLoC-to-BLoC Interactions
 
-BLoC не должен знать о других BLoC. Взаимодействие между BLoC организуется **снаружи**, на уровне UI или специального координатора:
+Не связывай BLoC'и друг с другом. BLoC не должен знать о других BLoC. Организуй взаимодействие **снаружи**, на уровне UI или специального координатора:
 
 ```dart
 // ПЛОХО -- BLoC знает о другом BLoC
@@ -540,11 +581,15 @@ BlocListener<UserProfileBloc, UserProfileState>(
 )
 ```
 
+---
+
 ## Тестирование BLoC
+
+> Тестирование — важная часть работы с BLoC. Ниже приведены паттерны и примеры.
 
 ### Принцип: без blocTest
 
-BLoC тестируется **без** `blocTest` из пакета `flutter_bloc_test`. Используется стандартный подход: `expectLater` + `emitsInOrder`.
+Тестируй BLoC **без** `blocTest` из пакета `flutter_bloc_test`. Используй стандартный подход: `expectLater` + `emitsInOrder`.
 
 ### Настройка тестов
 
@@ -564,7 +609,7 @@ void main() {
   });
 
   tearDown(() {
-    bloc.close(); // ОБЯЗАТЕЛЬНО закрывайте BLoC в tearDown!
+    bloc.close(); // ОБЯЗАТЕЛЬНО закрывай BLoC в tearDown!
   });
 ```
 
@@ -577,7 +622,7 @@ void main() {
     when(mockRepository.fetchProfile('1'))
         .thenAnswer((_) async => profile);
 
-    // Assert (подписываемся ДО действия)
+    // Assert (подписывайся ДО действия)
     expectLater(
       bloc.stream,
       emitsInOrder([
@@ -625,7 +670,7 @@ void main() {
   test('update preserves data on error', () {
     final existingProfile = UserProfile(id: '1', name: 'Old', email: 'old@test.com');
 
-    // Устанавливаем начальное состояние через fetch
+    // Устанавливай начальное состояние через fetch
     when(mockRepository.fetchProfile('1'))
         .thenAnswer((_) async => existingProfile);
     when(mockRepository.updateProfile(name: 'New', email: 'new@test.com'))
@@ -667,7 +712,7 @@ import 'package:async/async.dart';
     when(mockRepository.deleteProfile()).thenAnswer((_) async {});
     when(mockSettingsRepository.refresh()).thenAnswer((_) async => defaultSettings);
 
-    // Объединяем стримы для проверки порядка
+    // Объединяй стримы для проверки порядка
     final merged = StreamGroup.merge([
       bloc.stream.map((s) => ('profile', s)),
       settingsBloc.stream.map((s) => ('settings', s)),
@@ -746,18 +791,18 @@ import 'package:async/async.dart';
 
 ## Key Takeaways / Ключевые выводы
 
-1. Четыре состояния: **Idle / Processing / Success / Error** -- покрывают 99% кейсов
-2. **Не создавайте** InitialState, LoadingState, SuccessfullyCreatedState
+1. Используй четыре состояния: **Idle / Processing / Success / Error** -- покрывают 99% кейсов
+2. **Не создавай** InitialState, LoadingState, SuccessfullyCreatedState
 3. Именование: `{Feature}State${Status}` (например, `UserProfileState$Idle`)
 4. **Один `on<Event>`** с switch expression -- НЕ несколько `on` handlers
 5. `handle()` -- единый паттерн обработки с processing/error/done
-6. **Callbacks в событиях** -- для навигации и side effects (используйте экономно)
+6. **Callbacks в событиях** -- для навигации и side effects (используй экономно)
 7. `ErrorType` enum -- идентификация, какая операция вызвала ошибку
 8. **Данные сохраняются** во всех переходах состояний (`data` в base class)
 9. **BlocObserver** -- централизованное логирование и обработка ошибок
 10. **Никаких Flutter-импортов** в BLoC (кроме foundation)
 11. **Никаких BLoC-to-BLoC** взаимодействий внутри BLoC
-12. Тестирование через `expectLater` + `emitsInOrder`, **без blocTest**
-13. Используйте `isA<Type>().having()` для проверки полей в тестах
+12. Тестируй через `expectLater` + `emitsInOrder`, **без blocTest**
+13. Используй `isA<Type>().having()` для проверки полей в тестах
 14. `StreamGroup` для тестирования взаимодействия нескольких BLoC
-15. **Всегда закрывайте** BLoC в `tearDown`
+15. **Всегда закрывай** BLoC в `tearDown`

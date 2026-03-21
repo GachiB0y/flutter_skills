@@ -1,17 +1,13 @@
 ---
-name: Chat Implementation (SSE)
-description: SSE-подписка, heartbeat timer, переподключение, chat entity events, стриминг ответов
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: chat-sse
+description: Use when implementing chat with SSE (Server-Sent Events), heartbeat timer, reconnection logic, or streaming responses. MUST use for any real-time chat, SSE subscription, or server streaming implementation in Flutter.
 ---
 
 # Chat Implementation (SSE) / Реализация чата через SSE
 
-## SSE (Server-Sent Events) -- не WebSocket
+## SSE (Server-Sent Events) — не WebSocket
 
-> "Это не WebSocket. Это SSE -- более тупая вещь."
-
-SSE -- HTTP-запрос, который бэкенд **не закрывает**, а стримит обновления в теле ответа. Каждая строка -- событие.
+SSE — HTTP-запрос, который бэкенд не закрывает, а стримит обновления в теле ответа. Каждая строка — событие:
 
 ```
 GET /chat/{id}/subscribe HTTP/1.1
@@ -24,6 +20,8 @@ data: {"type": "ping"}
 ```
 
 ## Chat Entity Events / Типы событий
+
+Определяй типы событий через sealed class:
 
 ```dart
 sealed class ChatSseEvent {
@@ -56,7 +54,7 @@ class PingEvent extends ChatSseEvent {
 
 ## Подписка в BLoC-е
 
-SSE-подписка создаётся в **конструкторе BLoC-а**:
+Создавай SSE-подписку в конструкторе BLoC-а:
 
 ```dart
 class ChatBloc extends Bloc<ChatEvent, ChatState> with SetStateMixin, BlocController {
@@ -77,7 +75,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> with SetStateMixin, BlocContro
     _subscription?.cancel();
     _subscription = _repository.subscribe(chatId).listen(
       (event) {
-        _lastUpdate = DateTime.now(); // Обновляем timestamp
+        _lastUpdate = DateTime.now(); // Обновляй timestamp
 
         switch (event) {
           case UserMessageEvent(:final text, :final id):
@@ -87,12 +85,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> with SetStateMixin, BlocContro
           case StatusEvent(:final status):
             _updateStatus(status);
           case PingEvent():
-            // Просто обновляем _lastUpdate
+            // Просто обновляй _lastUpdate
             break;
         }
       },
       onError: (error) {
-        // Ошибка подписки -- пробуем переподключиться
+        // Ошибка подписки — переподключайся
         _reconnect();
       },
     );
@@ -100,21 +98,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> with SetStateMixin, BlocContro
 }
 ```
 
-### Важный момент: сообщения приходят через SSE, не через POST-ответ
-
-> "Когда я отправляю сообщение бэкенду, бэкенд мне даже не отвечает сообщение, которое я отправил. У меня нет ID отправленного сообщения. Я именно сообщение ловлю из SSE эвентом."
+### Важно: сообщения приходят через SSE, не через POST-ответ
 
 Поток:
 1. Пользователь отправляет POST (текст сообщения)
 2. Поле ввода блокируется
 3. Бэкенд обрабатывает, стримит ответ через SSE
-4. SSE-подписка получает `UserMessageEvent` -- сообщение пользователя
-5. SSE-подписка получает `AssistantMessageEvent` -- ответ ассистента
+4. SSE-подписка получает `UserMessageEvent` — сообщение пользователя
+5. SSE-подписка получает `AssistantMessageEvent` — ответ ассистента
 6. Поле ввода разблокируется
 
 ## Heartbeat Timer / Проверка соединения
 
-> "Максимально тупой подход. Просто таймер, который проверяет, когда последний раз бэкенд присылал пинг."
+Используй простой heartbeat timer для проверки соединения:
 
 ```dart
 void _startHeartbeat() {
@@ -139,61 +135,61 @@ void _checkConnection() {
 
 ```dart
 void _reconnect() {
-  // 1. Показываем пользователю "нет интернета"
+  // 1. Покажи пользователю "нет интернета"
   setState(ChatState.processing(
     data: state.data,
     message: 'reconnecting',
   ));
 
-  // 2. Отписываемся от старого стрима
+  // 2. Отпишись от старого стрима
   _subscription?.cancel();
   // При отмене подписки HTTP-запрос тоже закрывается
 
-  // 3. Подписываемся заново
+  // 3. Подпишись заново
   _subscribe();
 }
 ```
 
 ## Close / Очистка ресурсов
 
+В `close()` отменяй таймер и отписывайся от SSE:
+
 ```dart
 @override
 Future<void> close() {
-  _heartbeatTimer?.cancel();       // Останавливаем таймер
-  _subscription?.cancel();          // Отписываемся от SSE
+  _heartbeatTimer?.cancel();       // Останавливай таймер
+  _subscription?.cancel();          // Отписывайся от SSE
   return super.close();
 }
 ```
 
-> "В close я отписываюсь от таймера проверки жизнеспособности и от подписки на репозиторий."
-
-## Состояние подписки -- в BLoC-е, не в репозитории
+## Состояние подписки — в BLoC-е, не в репозитории
 
 ```dart
-// lastUpdate -- это мутабельная переменная = состояние
+// lastUpdate — это мутабельная переменная = состояние
 // Состояние должно быть в BLoC-е, не в репозитории
 DateTime _lastUpdate = DateTime.now();
 StreamSubscription? _subscription;
 Timer? _heartbeatTimer;
 ```
 
-> "Подписка, мутабельная переменная -- это состояние. Состояние должно быть в BLoC-е. У репозиториев состояния быть не должно."
+Храни состояние подписки (lastUpdate, subscription, timer) в BLoC-е. У репозиториев состояния быть не должно.
 
 ### Почему не в репозитории
 
 - Может быть несколько BLoC-ов одновременно (несколько чатов открыто)
 - Они будут драться за общий `lastUpdate`
-- При close BLoC-а нужно отписаться **только от своей** подписки
+- При close BLoC-а нужно отписаться только от своей подписки
 
 ### У репозиториев нет dispose
 
-> "У репозиториев не должно быть dispose. Если есть -- значит есть состояние. В репозиториях подписки быть не должно в продакшене."
+У репозиториев не должно быть dispose. Если есть — значит есть состояние. Подписки в репозиториях быть не должно.
 
-Исключение: эфемерный кэш (хэш-таблица) -- это допустимо:
+Исключение: эфемерный кэш (хэш-таблица) — это допустимо:
 
 ```dart
 class ChatRepository {
-  // Допустимо -- кэш в памяти (как база данных в памяти)
+  // Допустимо — кэш в памяти (как база данных в памяти)
   final Map<String, ChatEntity> _cache = {};
 }
 ```
@@ -207,13 +203,13 @@ class ChatRepositoryImpl implements ChatRepository {
     final controller = StreamController<ChatSseEvent>();
 
     controller.onCancel = () {
-      // При отписке: закрыть HTTP-соединение
+      // При отписке: закрой HTTP-соединение
     };
 
-    // Запускаем HTTP-запрос
+    // Запускай HTTP-запрос
     final response = await client.get('/chat/$chatId/subscribe');
 
-    // Стримим строки из тела ответа
+    // Стримь строки из тела ответа
     await for (final line in response.stream) {
       if (controller.isClosed) break;
       final event = parseEvent(line);
@@ -225,14 +221,14 @@ class ChatRepositoryImpl implements ChatRepository {
 }
 ```
 
-## Key Takeaways / Ключевые выводы
+## Key Takeaways
 
-1. **SSE** (не WebSocket) -- HTTP-запрос, бэкенд стримит обновления в теле
-2. **Heartbeat timer** -- простой таймер (30 секунд без пинга = переподключение)
-3. Состояние подписки (lastUpdate, subscription, timer) -- **в BLoC-е**, не в репозитории
+1. **SSE** (не WebSocket) — HTTP-запрос, бэкенд стримит обновления в теле
+2. **Heartbeat timer** — простой таймер (30 секунд без пинга = переподключение)
+3. Состояние подписки (lastUpdate, subscription, timer) — в BLoC-е, не в репозитории
 4. Сообщения пользователя приходят через SSE, а не как ответ на POST
-5. Close: отменить таймер + отменить подписку (в `close()` override)
-6. У репозиториев **нет** dispose и **нет** состояния (кроме эфемерного кэша)
-7. Несколько BLoC-ов чата могут существовать одновременно -- каждый со своей подпиской
-8. BLoC использует **SetStateMixin** для `setState()` и **BlocController** mixin для `handle()`
-9. SSE-подписка инициируется в **конструкторе BLoC-а**, `notifyListeners()` заменён на `setState()`
+5. Close: отменяй таймер + отменяй подписку (в `close()` override)
+6. У репозиториев нет dispose и нет состояния (кроме эфемерного кэша)
+7. Несколько BLoC-ов чата могут существовать одновременно — каждый со своей подпиской
+8. BLoC использует SetStateMixin для `setState()` и BlocController mixin для `handle()`
+9. SSE-подписку инициируй в конструкторе BLoC-а

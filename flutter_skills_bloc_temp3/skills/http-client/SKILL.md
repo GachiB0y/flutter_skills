@@ -1,15 +1,13 @@
 ---
-name: HTTP Client & Networking
-description: HTTP-клиент на базе стандартного http пакета, middleware vs interceptors, SSE-поддержка, список middleware
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: http-client
+description: Use when creating HTTP client, setting up middleware (retry, cache, dedup, logging, timeout, meta), implementing SSE support, or choosing between Dio and http package. MUST use for any networking, API client, or HTTP middleware questions in Flutter.
 ---
 
 # HTTP Client & Networking / HTTP-клиент и работа с сетью
 
 ## Why not Dio / Почему не Dio
 
-Проект начинался с Dio, но был полностью переписан на стандартный `http` пакет с собственной обёрткой.
+Используй стандартный `http` пакет с собственной обёрткой вместо Dio.
 
 Собственный HTTP-клиент поддерживает:
 - Middleware (interceptors)
@@ -19,7 +17,7 @@ source: Doctorina project review by Misha/Fox (DART SIDE channel)
 
 ## Middleware vs Interceptors
 
-Используется паттерн middleware (цепочка обработчиков) поверх стандартного `http` пакета. Клиент создаётся через factory, а не напрямую:
+Используй паттерн middleware (цепочка обработчиков) поверх стандартного `http` пакета. Создавай клиент через factory, а не напрямую:
 
 ```dart
 // В Dependencies:
@@ -36,7 +34,7 @@ deps.httpFactory = () => createApiClient(deps);
 
 ### Head-of-line Blocking
 
-Хорошая практика -- использовать один HTTP-клиент для большинства запросов, но не для всего. Отдельные клиенты нужны для:
+Используй один HTTP-клиент для большинства запросов, но создавай отдельные для долгих операций. Отдельные клиенты нужны для:
 - **Долгие запросы** (генерация summary -- может занимать 2 минуты)
 - **Скачивание/загрузка файлов**
 - **SSE-подписки**
@@ -58,11 +56,11 @@ deps.httpFactory = () => createApiClient(deps);
 
 ### 2. Cache
 
-Кэширование ответов (в SQLite или memory). Позволяет снизить количество обращений к бэкенду.
+Кэшируй ответы (в SQLite или memory). Это позволяет снизить количество обращений к бэкенду.
 
 ### 3. Meta Middleware
 
-Подставляет метаинформацию о приложении в заголовки каждого запроса:
+Подставляй метаинформацию о приложении в заголовки каждого запроса:
 
 ```
 X-Platform: android
@@ -78,14 +76,14 @@ X-Client: doctorina/1.2.3
 
 ### 4. Retry Middleware
 
-Повторные запросы при определённых ошибках:
+Повторяй запросы при определённых ошибках:
 
 ```dart
-// Повторять:
+// Повторяй:
 // - Timeout exceptions (бэк думал слишком долго)
 // - 500+ (серверные ошибки, может быть перезагрузка)
 
-// НЕ повторять:
+// НЕ повторяй:
 // - 401 (повторный запрос тоже вернёт 401)
 // - 403 (нет доступа)
 // - 429 (rate limiting -- повторный запрос сделает хуже)
@@ -96,15 +94,15 @@ X-Client: doctorina/1.2.3
 
 ### 5. Logger Middleware
 
-Логирование всех запросов и ответов. Полезно для отладки.
+Логируй все запросы и ответы. Полезно для отладки.
 
 ### 6. Sentry Middleware
 
-Логирование запросов в Sentry в плане производительности (performance monitoring). Альтернатива: Firebase Performance Monitor (работает под все платформы без дополнительных флагов).
+Логируй запросы в Sentry в плане производительности (performance monitoring). Альтернатива: Firebase Performance Monitor (работает под все платформы без дополнительных флагов).
 
 ### 7. Timeout Middleware
 
-Общий timeout для всех запросов:
+Устанавливай общий timeout для всех запросов:
 
 ```dart
 // Стандартный timeout (12-15 секунд для типичного приложения)
@@ -113,35 +111,7 @@ X-Client: doctorina/1.2.3
 
 ### 8. Auth Middleware
 
-Аутентификация запросов. Принимает два callback'а:
-
-```dart
-class AuthMiddleware {
-  final Future<String?> Function() getToken;
-  final Future<void> Function() logout;
-
-  // Перед запросом: получает токен, добавляет в заголовки
-  // При 401: вызывает logout
-}
-```
-
-Ключевой момент: middleware принимает **callback'и** (`getToken`, `logout`), а не BLoC напрямую. Это позволяет:
-- Middleware не зависит от слоя аутентификации
-- Легко тестировать
-- Легко переиспользовать
-
-```dart
-// Создание клиента с auth middleware:
-final client = ApiClient(
-  middlewares: [
-    AuthMiddleware(
-      getToken: () => authBloc.state.data?.token,
-      logout: () => authBloc.add(const AuthEvent.logout()),
-    ),
-    // ...другие middleware
-  ],
-);
-```
+Подробная реализация — см. `09_authentication.md`. Auth middleware принимает callback'и (`getToken`, `logout`), а не BLoC напрямую.
 
 ## SSE (Server-Sent Events)
 
@@ -164,7 +134,7 @@ Stream<ChatEntity> subscribe(String chatId) async* {
 
 ## Разделитель в именах классов
 
-Интересный паттерн именования с `$` как визуальный разделитель:
+Используй `$` как визуальный разделитель в именах:
 
 ```dart
 // ClientException -- exception от клиента
@@ -180,7 +150,7 @@ class Client$AuthenticationException extends ClientException {}
 
 ## Key Takeaways / Ключевые выводы
 
-1. Стандартный `http` пакет + собственная обёртка с middleware вместо Dio
+1. Используй стандартный `http` пакет + собственную обёртку с middleware вместо Dio
 2. Один основной клиент + отдельные для долгих операций (Head-of-line blocking)
 3. Auth middleware принимает callback'и, не BLoC
 4. Retry только для серверных/timeout ошибок, не для 4xx

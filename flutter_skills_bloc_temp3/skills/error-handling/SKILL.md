@@ -1,15 +1,13 @@
 ---
-name: Error Handling
-description: Обработка ошибок, ErrorUtil, pattern matching, Sentry (sample rate, breadcrumbs, screenshots, event processors), логирование, log buffer
-type: flutter-skill
-source: Doctorina project review by Misha/Fox (DART SIDE channel)
+name: error-handling
+description: Use when setting up error handling, integrating Sentry (sample rate, breadcrumbs, screenshots), creating ErrorUtil with pattern matching, configuring LogBuffer, or handling errors in BLoC. MUST use for any error handling, logging, or crash reporting setup in Flutter.
 ---
 
 # Error Handling / Обработка ошибок
 
 ## Принцип: ошибки не долетают до виджетов
 
-> "Ни одна ошибка логики никогда не прилетит в виджет. Прямо буквально никакая ошибка. Всё перехватывается строго BLoC-ом."
+Не допускай, чтобы ошибки логики долетали до виджетов. Всё перехватывай в BLoC.
 
 Цепочка обработки:
 1. **Репозиторий** -- может бросить ошибку (это нормально)
@@ -63,7 +61,7 @@ context.read<MyBloc>().add(MyEvent.create(
 
 ### Sample Rate -- обязательно
 
-> "Вам не имеет абсолютно смысла логировать каждую ошибку."
+Не логируй каждую ошибку. Обязательно используй sample rate в Sentry.
 
 Расчёт: 1000 пользователей x 10 ошибок x 2 сеанса x 30 дней = 600,000 ошибок/месяц. Никто не будет просматривать каждую.
 
@@ -217,8 +215,6 @@ ChatBloc: ChatState$Processing(message: creating chat)
 ChatBloc: ChatState$Idle(message: chat created)
 ```
 
-> "Каждая строка, она имеет какой-то смысл. Прямо по логам понятно, что происходит."
-
 Message не влияет на UI -- это чисто для:
 - Логов
 - Sentry
@@ -226,8 +222,11 @@ Message не влияет на UI -- это чисто для:
 
 ## handle() для перехвата всех ошибок
 
+Реализация `handle()` через `BlocController` mixin описана в `05_state_management.md`. Каждый event handler BLoC-а оборачивается в `handle()`, который автоматически перехватывает ошибки и переводит состояние в Error.
+
+Для глобального перехвата необработанных ошибок используй `runZonedGuarded` в main:
+
 ```dart
-// В main:
 runZonedGuarded(
   () => runApp(MyApp()),
   (error, stackTrace) {
@@ -235,16 +234,6 @@ runZonedGuarded(
     Sentry.captureException(error, stackTrace: stackTrace);
   },
 );
-
-// В каждом event handler BLoC-а (через BlocController mixin):
-Future<void> handle(Emitter<State> emit, Future<void> Function() body) async {
-  try {
-    await body();
-  } catch (error, stackTrace) {
-    emit(FailedState(error: error, data: state.data));
-    Bloc.observer.onError(this, error, stackTrace);
-  }
-}
 ```
 
 ### Отличие от try-catch
@@ -257,7 +246,7 @@ try {
 } catch (e) { /* не поймает */ }
 ```
 
-`handle()` из BlocController mixin оборачивает всю логику в безопасный блок. Для глобального перехвата в main используется `runZoneGuarded`.
+`handle()` из BlocController mixin оборачивает всю логику в безопасный блок. Для глобального перехвата — `runZonedGuarded` в main.
 
 ## Key Takeaways / Ключевые выводы
 
