@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "bash .claude/hooks/git-flow-reminder.sh",
+        "blocking": false
+      }
+    ]
+  }
+}
