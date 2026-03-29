@@ -1,0 +1,66 @@
+# .claude/git-flow.yaml
+# Git Flow configuration for AI agents.
+# This is the ONLY file that changes from project to project.
+# Skills and hooks read this file to follow project conventions.
+
+# === BRANCHES ===
+base_branch: dev
+branch_template: "{ticket}-{description}"
+# Template variables:
+#   {ticket}      — task number (e.g. #228, CO-718)
+#   {description} — short kebab-case description (AI generates from context)
+#   {type}        — branch type (feature, fix, etc.)
+#   {scope}       — optional scope (payments, auth, etc.)
+#
+# Examples for different projects:
+#   "{ticket}-{description}"                        → #228-auth-flow
+#   "feature/{scope}/{ticket}/{description}"         → feature/payments/CO-718/create-balance
+#   "{type}/{ticket}-{description}"                  → feature/CO-123-auth-flow
+
+branch_types:
+  - feature
+  - fix
+  - refactor
+  - hotfix
+
+ticket_pattern: "#\\d+"
+# Examples:
+#   "#\\d+"          → #228
+#   "CO-\\d+"        → CO-718
+#   "[A-Z]+-\\d+"    → PROJ-123
+
+# === COMMITS ===
+commit_template: "{ticket}: {message}"
+# Examples:
+#   "{ticket}: {message}"              → #228: create auth repo
+#   "{type}({scope}): {message}"       → feat(auth): create auth repo
+
+commit_types:
+  - feat
+  - fix
+  - refactor
+  - docs
+  - test
+  - chore
+
+commit_body: true
+
+# === PR ===
+pr_target_branch: dev
+pr_title_template: "{ticket}: {description}"
+
+pr_body_template: |
+  ## Summary
+  {summary}
+
+  ## Changes
+  {changes}
+
+  ## Test plan
+  {test_plan}
+
+auto_push_before_pr: true
+
+# === BEHAVIOR ===
+suggest_commit_after_logical_chunk: true
+suggest_pr_on_task_complete: true

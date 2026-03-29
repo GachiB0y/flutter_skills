@@ -15,6 +15,114 @@ description: Use when setting up error handling, integrating Sentry (sample rate
 3. **BlocObserver** -- логирует, отправляет в Sentry
 4. **Виджет** -- видит только состояние (Idle/Processing/Failed), не ошибку
 
+## Не используй Either/Result в Dart
+
+Either/Result паттерн **вреден** в Dart-экосистеме:
+
+- **Потеря стек-трейса** -- при замене throw на return теряется оригинальный stack trace
+- **Двойная работа** -- внешние библиотеки (Dio, Firebase, Drift) бросают exceptions, всё равно нужен try/catch для конвертации в Either
+- **Несовместимость с экосистемой** -- BlocObserver, runZonedGuarded, FlutterError.onError ожидают thrown errors
+- **Усложнение без пользы** -- Dart не Rust/Kotlin, у него нет exhaustive matching на Result
+
+Используй стандартный exception-based подход с try/catch.
+
+## Дизайн кастомных исключений
+
+Создавай domain-specific исключения с полезными данными:
+
+```dart
+final class OtpUserBlockedException implements Exception {
+  final Duration? blockDuration;
+  final String? message;
+
+  const OtpUserBlockedException({
+    this.blockDuration,
+    this.message,
+  });
+}
+
+final class PostPublishException implements Exception {
+  final Object? cause;
+
+  const PostPublishException(this.cause);
+}
+```
+
+Правила:
+- Используй `implements Exception`, не `extends`
+- Добавляй поля с контекстом ошибки (duration, code, message)
+- Делай `final class` для sealed иерархий
+
+## Сохранение стек-трейса: Error.throwWithStackTrace
+
+При оборачивании ошибки в кастомный тип **всегда** сохраняй оригинальный стек-трейс:
+
+```dart
+try {
+  await publishPost();
+} on PostPublishException {
+  rethrow; // Уже нужный тип -- просто пробрасываем
+} catch (e, stack) {
+  // Оборачиваем, сохраняя оригинальный stack trace
+  Error.throwWithStackTrace(PostPublishException(e), stack);
+}
+```
+
+**Никогда** не делай `throw PostPublishException(e)` без стек-трейса -- потеряешь информацию о месте возникновения ошибки.
+
+### Pattern matching на данных ответа (map patterns)
+
+Для извлечения структурированных данных из ошибок API используй map patterns:
+
+```dart
+try {
+  await sendOtp(phoneNumber);
+} catch (e, stackTrace) {
+  if (e.error
+      case {
+        'code': 'OTP_USER_BLOCKED',
+        'block_duration': final int blockDuration,
+        'message': final String message,
+      }) {
+    Error.throwWithStackTrace(
+      OtpUserBlockedException(
+        blockDuration: Duration(seconds: blockDuration),
+        message: message,
+      ),
+      stackTrace,
+    );
+  }
+  rethrow;
+}
+```
+
+## Селективный rethrow в BLoC
+
+Известные ошибки обрабатываем **без** rethrow (они не должны попадать в Sentry). Неизвестные -- **rethrow** для propagation в BlocObserver/Sentry:
+
+```dart
+Future<void> _sendOtp(
+  OtpSendEvent event,
+  Emitter<OtpState> emitter,
+) async {
+  try {
+    emitter(const OtpProgressState());
+    await _otpRepository.sendOtp(event.phoneNumber);
+    emitter(const OtpSuccessState());
+  } on OtpUserBlockedException catch (e) {
+    // Известная ошибка -- обрабатываем, НЕ пробрасываем
+    logger.warning('User is blocked for ${e.blockDuration}');
+    emitter(OtpFailureState(e));
+  } catch (e) {
+    // Неизвестная ошибка -- пробрасываем в BlocObserver → Sentry
+    emitter(OtpFailureState(e));
+    rethrow;
+  }
+}
+```
+
+Принцип: **rethrow неизвестных ошибок** -- чтобы BlocObserver и Sentry узнали о них. Известные ошибки (бизнес-логика) не пробрасываем.
+
 ## ErrorUtil и Pattern Matching
 
 Ошибки преобразуются в пользовательские сообщения через pattern matching:
@@ -203,6 +311,35 @@ Logger.instance.listen((log) {
 });
 ```
 
+### Stream-based error reporting
+
+Автоматическая отправка ошибок в Sentry через поток логов:
+
+```dart
+class ErrorReporter {
+  StreamSubscription<LogMessage>? _subscription;
+
+  Stream<LogMessage> get _reportLogs =>
+      _logger.logs.where((log) => log.level == LogLevel.error);
+
+  Future<void> enableReporting() async {
+    _subscription ??= _reportLogs.listen((log) async {
+      await Sentry.captureException(
+        log.error ?? log.message,
+        stackTrace: log.stackTrace,
+      );
+    });
+  }
+
+  void disableReporting() {
+    _subscription?.cancel();
+    _subscription = null;
+  }
+}
+```
+
+Это дополняет LogBuffer: буфер хранит историю, а stream reporter автоматически отправляет ошибки в реальном времени.
+
 ## BLoC state logging -- для отладки
 
 Каждый стейт содержит `message` для человекочитаемых логов:
@@ -224,7 +361,9 @@ Message не влияет на UI -- это чисто для:
 
 Реализация `handle()` через `BlocController` mixin описана в `05_state_management.md`. Каждый event handler BLoC-а оборачивается в `handle()`, который автоматически перехватывает ошибки и переводит состояние в Error.
 
-Для глобального перехвата необработанных ошибок используй `runZonedGuarded` в main:
+Для глобального перехвата необработанных ошибок используй три уровня:
+
+### 1. runZonedGuarded -- ловит ошибки Dart-кода
 
 ```dart
 runZonedGuarded(
@@ -235,6 +374,30 @@ runZonedGuarded(
   },
 );
 ```
+
+### 2. FlutterError.onError -- ловит ошибки фреймворка Flutter
+
+```dart
+FlutterError.onError = (details) {
+  logger.logFlutterError(details);
+  Sentry.captureException(
+    details.exception,
+    stackTrace: details.stack,
+  );
+};
+```
+
+### 3. PlatformDispatcher.onError -- ловит ошибки платформы
+
+```dart
+WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+  logger.logPlatformDispatcherError(error, stack);
+  Sentry.captureException(error, stackTrace: stack);
+  return true;
+};
+```
+
+Все три уровня нужны для полного покрытия -- каждый ловит свою категорию ошибок.
 
 ### Отличие от try-catch
 
@@ -250,12 +413,17 @@ try {
 
 ## Key Takeaways / Ключевые выводы
 
-1. Ошибки **никогда** не пробрасываются в виджеты (нет rethrow)
-2. Sentry sample rate -- обязательно, не логируйте 100% ошибок
-3. Breadcrumbs + последние логи из буфера -- для понимания контекста
-4. ErrorUtil с pattern matching -- преобразование ошибок в сообщения
-5. Локализация ошибок -- только в виджете (через onError callback в BLoC event)
-6. LogBuffer (10,000 элементов) -- для отладки и Sentry
-7. `handle()` из BlocController mixin -- в каждом event handler BLoC-а; `runZoneGuarded` -- в main
-8. Message в стейте -- для логов и отладки, не для UI
-9. **BlocObserver** -- стандартный flutter_bloc observer для логирования и отправки в Sentry
+1. Ошибки **не долетают до виджетов** -- BLoC перехватывает и переводит в FailedState
+2. **Селективный rethrow** -- известные ошибки обрабатываем без rethrow, неизвестные пробрасываем в BlocObserver/Sentry
+3. **Не используй Either/Result** -- Dart-экосистема основана на exceptions, Either теряет стек-трейсы
+4. **Error.throwWithStackTrace** -- при оборачивании ошибки всегда сохраняй оригинальный stack trace
+5. **Кастомные исключения** с данными (duration, code, message) -- `final class ... implements Exception`
+6. Sentry sample rate -- обязательно, не логируйте 100% ошибок
+7. Breadcrumbs + последние логи из буфера -- для понимания контекста
+8. ErrorUtil с pattern matching -- преобразование ошибок в сообщения (по типам и по map patterns)
+9. Локализация ошибок -- только в виджете (через onError callback в BLoC event)
+10. LogBuffer (10,000 элементов) + Stream-based error reporting -- для отладки и Sentry
+11. **Три уровня перехвата**: `runZonedGuarded` + `FlutterError.onError` + `PlatformDispatcher.onError`
+12. `handle()` из BlocController mixin -- в каждом event handler BLoC-а
+13. Message в стейте -- для логов и отладки, не для UI
+14. **BlocObserver** -- стандартный flutter_bloc observer для логирования и отправки в Sentry

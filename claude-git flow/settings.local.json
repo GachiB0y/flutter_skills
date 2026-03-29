@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(open /tmp/flutter_skills_eval_review.html)",
+      "Bash(ls -la /Users/alexander.volkov/Documents/flutter_skills/flutter_skills_bloc_temp2/ 2>/dev/null || echo \"NOT FOUND\"; find /Users/alexander.volkov/Documents/flutter_skills/ -maxdepth 2 -name \"*.md\" -path \"*temp2*\" 2>/dev/null | head -20)",
+      "Bash(open /tmp/flutter_skills_eval_review_iter2.html)",
+      "WebFetch(domain:lazebny.io)"
+    ]
+  }
+}
