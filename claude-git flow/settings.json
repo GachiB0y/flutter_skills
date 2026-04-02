@@ -2,8 +2,14 @@
   "hooks": {
     "SessionStart": [
       {
-        "command": "bash .claude/hooks/git-flow-reminder.sh",
-        "blocking": false
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/git-flow-reminder.sh",
+            "blocking": false
+          }
+        ]
       }
     ]
   }
