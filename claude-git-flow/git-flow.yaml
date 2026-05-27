@@ -29,6 +29,9 @@ ticket_pattern: "#\\d+"
 #   "CO-\\d+"        → CO-718
 #   "[A-Z]+-\\d+"    → PROJ-123
 
+# Concrete branch name expected in this project (full example for skills to show).
+branch_example: "#3018-required-phone-field"
+
 # === COMMITS ===
 commit_template: "{ticket}: {message}"
 # Examples:
@@ -44,6 +47,25 @@ commit_types:
   - chore
 
 commit_body: true
+
+# Full reference commit (skills show this when generating a message).
+commit_example: |
+  #3018: require phone field on registration and personal data
+
+  - Make phone required (validator + isRequired) on registration and personal data forms
+  - Add `validator` parameter to AppPhoneField that delegates to IntlPhoneField
+  - Tighten UpdateProfileDto.phone to non-nullable required String
+  - PersonalDataMapper asserts non-empty phone before mapping (UI validates upstream)
+  - Refactor RegistrationState.error to hold raw Object instead of pre-localized String
+  - Update affected tests
+
+# Project rules for commit messages. Skills must enforce these before committing.
+commit_policy:
+  - "Title MUST start with `#<ticket>:` — the `#` is part of the ticket, not optional"
+  - "Ticket in title MUST match the ticket extracted from the branch name"
+  - "Body bullets are present-tense imperative (`Add`, `Make`, `Refactor`) — not past tense (`Added`, `Made`)"
+  - "Do NOT add `Co-Authored-By: ...` footer in this project"
+  - "Stage only files touched by the task — never `git add -A` or `git add .`"
 
 # === PR ===
 pr_target_branch: dev

@@ -20,6 +20,10 @@ Read `.claude/git-flow.yaml` and extract:
 - `commit_types` — available types (if template uses `{type}`)
 - `commit_body` — whether to add body description
 - `ticket_pattern` — regex to extract ticket from branch name
+- `commit_example` — full reference commit (title + body) for this project, if present
+- `commit_policy` — list of project-specific rules; enforce ALL of them before Step 6
+
+Anything project-specific (ticket prefix style, allowed footers, body tense) lives in those fields. Skills do not hardcode it.
 
 ### Step 2: Extract Ticket from Branch
 
@@ -84,13 +88,9 @@ Show the full commit message:
 {formatted body if commit_body: true}
 ```
 
-Example:
-```
-#228: create auth repository
+**Show the project's reference commit.** If `.claude/git-flow.yaml` has a `commit_example`, print it verbatim above the generated message so the user can compare format side-by-side. Treat any deviation from that example's shape as a bug in the generated message, not a style choice.
 
-- Added AuthRepository interface in domain layer
-- Implemented AuthRepositoryImpl with Dio client
-```
+**Enforce `commit_policy`.** Walk through every rule in the list (e.g. ticket prefix style, body tense, allowed/forbidden footers, staging discipline) and verify the generated message + the staged file set comply. If any rule fails, fix the message before showing it.
 
 Ask: "Commit with this message? (yes / edit / cancel)"
 

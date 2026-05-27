@@ -45,8 +45,12 @@ If pull fails (conflicts, etc.) → report error and suggest manual resolution. 
 
 Ask the user: "What's the ticket number? (expected format: `{ticket_pattern}`)"
 
-Validate the answer against `ticket_pattern` regex from config.
-- If invalid → show expected format and ask again
+If `.claude/git-flow.yaml` has `branch_example`, show it as the concrete shape the user's answer should produce. That field is the source of truth for ticket-prefix style in this project.
+
+**Normalize the input before validation.** If the user types a value missing a literal prefix that the pattern requires (e.g. `3018` when the pattern is `#\d+`), prepend the missing prefix automatically and echo the result back to confirm. Users rarely type punctuation prefixes; silently dropping them and ending up with a branch that `git-commit` can't parse is the failure mode to avoid.
+
+Validate the (normalized) answer against `ticket_pattern`.
+- If still invalid → show expected format and `branch_example`, ask again
 - If valid → continue
 
 ### Step 5: Generate Branch Name
@@ -66,6 +70,8 @@ Assemble branch name from template by replacing variables.
 ### Step 6: Confirm and Create
 
 Show: "Creating branch: `{assembled_branch_name}` from `{base_branch}`. OK?"
+
+If `branch_example` is set in config, show it next to the assembled name so the user can sanity-check the shape matches the project convention.
 
 On confirmation:
 ```bash
